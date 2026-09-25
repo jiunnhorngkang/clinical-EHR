@@ -137,16 +137,18 @@ label.block { margin-top: 12px; }
 .bar { width: 60px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 .plan.urgent { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
-.btns { display: flex; gap: 6px; }
+.out-block { margin-bottom: 12px; }
+.out-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.out-head strong { color: var(--accent); font-size: 15px; }
+.out-head button { margin-left: auto; padding: 4px 12px; font-size: 13px; }
 .output {
-  min-height: 560px; font: 13px/1.55 Consolas, "Courier New", monospace;
-  white-space: pre; overflow: auto;
+  font: 13px/1.55 Consolas, "Courier New", monospace;
+  white-space: pre; overflow: auto; resize: vertical;
 }
 
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 16px; }
 
 @media (max-width: 800px) {
   .two-col { grid-template-columns: 1fr; }
-  .output { min-height: 360px; }
   .item { flex-wrap: wrap; }
 }

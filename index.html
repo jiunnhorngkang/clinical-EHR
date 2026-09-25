@@ -137,13 +137,21 @@
         <div>
           <div class="section-head">
             <h3>SOAP 病歷</h3>
-            <span class="btns">
-              <button id="copyBtn">複製</button>
-              <button id="dlBtn">下載 .txt</button>
-            </span>
+            <button id="dlBtn">下載全部 .txt</button>
           </div>
-          <textarea id="output" class="output" spellcheck="false"></textarea>
-          <p class="note" id="editNote">可直接編輯上方文字；但若再修改左側勾選，內容會重新產生。</p>
+          <div class="out-block">
+            <div class="out-head"><strong>S</strong> Subjective <button data-copy="outS">複製 S</button></div>
+            <textarea id="outS" class="output" rows="7" spellcheck="false"></textarea>
+          </div>
+          <div class="out-block">
+            <div class="out-head"><strong>O</strong> Objective <button data-copy="outO">複製 O</button></div>
+            <textarea id="outO" class="output" rows="9" spellcheck="false"></textarea>
+          </div>
+          <div class="out-block">
+            <div class="out-head"><strong>A/P</strong> Assessment &amp; Plan <button data-copy="outAP">複製 A/P</button></div>
+            <textarea id="outAP" class="output" rows="12" spellcheck="false"></textarea>
+          </div>
+          <p class="note">可直接編輯欄位文字；但若再修改左側勾選，內容會重新產生。</p>
         </div>
       </div>
       <div class="actions">

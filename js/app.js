@@ -250,18 +250,16 @@
   function generate() {
     const c = state.complaint;
     const side = $('side').value;
-    const L = [];
-    const today = new Date();
-    L.push(`Date: ${today.toISOString().slice(0, 10)}`);
-    L.push('');
+    const S = [];
+    const O = [];
+    const AP = [];
 
     // ---- S
     let cc;
     if (c.region === 'limb') cc = side in SIDE_WORD ? `${cap(SIDE_WORD[side])} ${c.cc}` : cap(c.cc);
     else cc = cap(c.cc) + (side in SIDE_WORD ? ` (${side === 'B' ? 'bilateral' : SIDE_WORD[side] + '-sided'})` : '');
     const dur = durationText();
-    L.push('S:');
-    L.push(`CC: ${cc}${dur ? ` for ${dur}` : ''}.`);
+    S.push(`CC: ${cc}${dur ? ` for ${dur}` : ''}.`);
 
     const demo = [];
     const age = $('age').value;
@@ -272,7 +270,7 @@
     let demoLine = demo.join(', ');
     if (demoLine) demoLine = cap(demoLine) + '.';
     if (nrs >= 0) demoLine += `${demoLine ? ' ' : ''}Pain NRS ${nrs}/10.`;
-    if (demoLine) L.push(`- ${demoLine}`);
+    if (demoLine) S.push(`- ${demoLine}`);
 
     const pos = [];
     const neg = [];
@@ -281,8 +279,8 @@
       if (v == null) return;
       (isPositive(item, v) ? pos : neg).push(itemPhrase(item, v));
     });
-    if (pos.length) L.push(`- (+) ${pos.join('; ')}`);
-    if (neg.length) L.push(`- (-) ${neg.join('; ')}`);
+    if (pos.length) S.push(`- (+) ${pos.join('; ')}`);
+    if (neg.length) S.push(`- (-) ${neg.join('; ')}`);
 
     const rfPos = [];
     const rfNeg = [];
@@ -291,31 +289,28 @@
       if (v === 'y') rfPos.push(item.text);
       else if (v === 'n') rfNeg.push(item.text);
     });
-    if (rfPos.length) L.push(`- RED FLAG (+): ${rfPos.join('; ')}`);
-    if (rfNeg.length) L.push(`- Red flags (-): ${rfNeg.join('; ')}`);
-    if ($('prevTx').value.trim()) L.push(`- ${$('prevTx').value.trim()}`);
-    if ($('historyNote').value.trim()) L.push(`- ${$('historyNote').value.trim()}`);
+    if (rfPos.length) S.push(`- RED FLAG (+): ${rfPos.join('; ')}`);
+    if (rfNeg.length) S.push(`- Red flags (-): ${rfNeg.join('; ')}`);
+    if ($('prevTx').value.trim()) S.push(`- ${$('prevTx').value.trim()}`);
+    if ($('historyNote').value.trim()) S.push(`- ${$('historyNote').value.trim()}`);
 
     // ---- O
-    L.push('');
-    L.push('O:');
-    if (c.region === 'limb' && side in SIDE_WORD) L.push(`[${cap(SIDE_WORD[side])} ${c.cc.replace(' pain', '')}]`);
+    if (c.region === 'limb' && side in SIDE_WORD) O.push(`[${cap(SIDE_WORD[side])} ${c.cc.replace(' pain', '')}]`);
     let anyExam = false;
     c.exam.forEach((item) => {
       const v = state.values.exam[item.id];
       if (v == null) return;
       anyExam = true;
-      L.push(`- ${item.text || item.label}: ${examValue(item, v)}`);
+      O.push(`- ${item.text || item.label}: ${examValue(item, v)}`);
     });
     if ($('examNote').value.trim()) {
       anyExam = true;
-      L.push(`- ${$('examNote').value.trim()}`);
+      O.push(`- ${$('examNote').value.trim()}`);
     }
-    if (!anyExam) L.push('- (not recorded)');
+    if (!anyExam) O.push('- (not recorded)');
 
     // ---- A
-    L.push('');
-    L.push('A:');
+    AP.push('A:');
     const rows = scoredDx().filter((r) => r.checked);
     const dxLines = rows.map((r) => {
       const icd = icdFor(r.dx);
@@ -323,17 +318,19 @@
     });
     if ($('dxOther').value.trim()) dxLines.push($('dxOther').value.trim());
     if (!dxLines.length) dxLines.push(`${cap(c.cc)}${sideSuffix()}, under evaluation`);
-    dxLines.forEach((d, i) => L.push(`${i + 1}. ${d}`));
-    if (rfPos.length) L.push(`* Red flag present — further work-up required`);
+    dxLines.forEach((d, i) => AP.push(`${i + 1}. ${d}`));
+    if (rfPos.length) AP.push(`* Red flag present — further work-up required`);
 
     // ---- P
-    L.push('');
-    L.push('P:');
+    AP.push('');
+    AP.push('P:');
     const plans = planItems(scoredDx()).filter((p) => p.checked).map((p) => p.text);
     $('planOther').value.split('\n').map((s) => s.trim()).filter(Boolean).forEach((s) => plans.push(s));
-    plans.forEach((p, i) => L.push(`${i + 1}. ${p}`));
+    plans.forEach((p, i) => AP.push(`${i + 1}. ${p}`));
 
-    $('output').value = L.join('\n');
+    $('outS').value = S.join('\n');
+    $('outO').value = O.join('\n');
+    $('outAP').value = AP.join('\n');
   }
 
   // ---------------------------------------------------------------- 導覽
@@ -353,7 +350,18 @@
     const d = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-    const blob = new Blob([$('output').value], { type: 'text/plain;charset=utf-8' });
+    const text = [
+      `Date: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      '',
+      'S:',
+      $('outS').value,
+      '',
+      'O:',
+      $('outO').value,
+      '',
+      $('outAP').value,
+    ].join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `SOAP_${state.complaint.id}_${stamp}.txt`;
@@ -361,17 +369,21 @@
     URL.revokeObjectURL(a.href);
   }
 
-  async function copy() {
-    const text = $('output').value;
+  async function copy(btn) {
+    const box = $(btn.dataset.copy);
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(box.value);
     } catch (e) {
-      $('output').select();
+      box.select();
       document.execCommand('copy');
     }
-    const b = $('copyBtn');
-    b.textContent = '已複製 ✓';
-    setTimeout(() => (b.textContent = '複製'), 1500);
+    const label = btn.textContent;
+    btn.textContent = '已複製 ✓';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = label;
+      btn.disabled = false;
+    }, 1500);
   }
 
   function reset() {
@@ -380,7 +392,7 @@
     state.values = { history: {}, redFlags: {}, exam: {} };
     state.dxOverride = {};
     state.planOverride = {};
-    ['age', 'durNum', 'prevTx', 'historyNote', 'examNote', 'dxOther', 'planOther', 'output'].forEach((id) => ($(id).value = ''));
+    ['age', 'durNum', 'prevTx', 'historyNote', 'examNote', 'dxOther', 'planOther', 'outS', 'outO', 'outAP'].forEach((id) => ($(id).value = ''));
     $('sex').value = '';
     $('side').value = 'U';
     $('onset').value = '';
@@ -399,7 +411,7 @@
   $('toStep3').onclick = () => go(3);
   $('back1').onclick = () => go(1);
   $('back2').onclick = () => go(2);
-  $('copyBtn').onclick = copy;
+  document.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = () => copy(b)));
   $('dlBtn').onclick = download;
   $('resetBtn').onclick = reset;
   document.querySelectorAll('[data-negate]').forEach((b) => (b.onclick = () => negateRest(b.dataset.negate)));
