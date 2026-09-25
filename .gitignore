@@ -1,0 +1,14 @@
+# 產出的病歷（可能含病人資料）— 絕不上傳
+SOAP_*.txt
+*.soap.txt
+
+# 病人資料常見格式
+*.csv
+*.xlsx
+*.xls
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/

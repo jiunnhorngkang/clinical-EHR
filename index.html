@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOAP 門診病歷產生器</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>SOAP 門診病歷產生器</h1>
+    <ol class="stepper" id="stepper">
+      <li data-step="1">1. 主訴</li>
+      <li data-step="2">2. 病史與理學檢查</li>
+      <li data-step="3">3. 評估與病歷</li>
+    </ol>
+  </header>
+
+  <main>
+    <!-- ================= Step 1 ================= -->
+    <section id="step1" class="step">
+      <h2>選擇主訴</h2>
+      <div class="cc-grid" id="ccGrid"></div>
+
+      <h2>基本資料</h2>
+      <p class="note">請勿輸入姓名、病歷號、身分證字號等可識別個資。</p>
+      <div class="form-grid">
+        <label>年齡 <input type="number" id="age" min="0" max="120" placeholder="歲"></label>
+        <label>性別
+          <select id="sex">
+            <option value="">—</option>
+            <option value="male">男 Male</option>
+            <option value="female">女 Female</option>
+          </select>
+        </label>
+        <label>側別
+          <select id="side">
+            <option value="U">— 未指定</option>
+            <option value="R">右 Right</option>
+            <option value="L">左 Left</option>
+            <option value="B">雙側 Bilateral</option>
+          </select>
+        </label>
+        <label>病程
+          <span class="inline">
+            <input type="number" id="durNum" min="0" placeholder="數字">
+            <select id="durUnit">
+              <option value="day">天 days</option>
+              <option value="week" selected>週 weeks</option>
+              <option value="month">月 months</option>
+              <option value="year">年 years</option>
+            </select>
+          </span>
+        </label>
+        <label>發作方式
+          <select id="onset">
+            <option value="">—</option>
+            <option value="insidious onset">漸進 insidious</option>
+            <option value="sudden onset">突發 sudden</option>
+            <option value="onset after lifting">搬重物後 after lifting</option>
+            <option value="onset after a fall">跌倒後 after a fall</option>
+            <option value="onset after sports activity">運動後 after sports</option>
+            <option value="onset after overuse">過度使用 overuse</option>
+          </select>
+        </label>
+        <label>疼痛分數 NRS <output id="nrsOut">—</output>
+          <input type="range" id="nrs" min="-1" max="10" value="-1">
+        </label>
+        <label class="wide">先前治療 / 補充病史
+          <input type="text" id="prevTx" placeholder="e.g. took NSAID from LMD with partial relief">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="toStep2" disabled>下一步 →</button>
+      </div>
+    </section>
+
+    <!-- ================= Step 2 ================= -->
+    <section id="step2" class="step" hidden>
+      <h2 id="step2Title"></h2>
+      <p class="note">點選 <b>+</b>／<b>−</b> 記錄陽性或陰性，再點一次可取消。未點選的項目不會寫入病歷。</p>
+      <div class="two-col">
+        <div>
+          <div class="section-head">
+            <h3>病史 History</h3>
+            <button class="ghost" data-negate="history">其餘設為陰性</button>
+          </div>
+          <div id="historyList" class="item-list"></div>
+
+          <div class="section-head red">
+            <h3>紅旗徵象 Red flags</h3>
+            <button class="ghost" data-negate="redFlags">其餘設為陰性</button>
+          </div>
+          <div id="redFlagList" class="item-list"></div>
+
+          <label class="block">其他病史
+            <textarea id="historyNote" rows="2"></textarea>
+          </label>
+        </div>
+        <div>
+          <div class="section-head">
+            <h3>理學檢查 Physical exam</h3>
+            <button class="ghost" data-negate="exam">其餘設為陰性</button>
+          </div>
+          <div id="examList" class="item-list"></div>
+          <label class="block">其他檢查發現
+            <textarea id="examNote" rows="2"></textarea>
+          </label>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="back1">← 上一步</button>
+        <button class="primary" id="toStep3">下一步 →</button>
+      </div>
+    </section>
+
+    <!-- ================= Step 3 ================= -->
+    <section id="step3" class="step" hidden>
+      <div class="two-col">
+        <div>
+          <div id="redAlert" class="alert" hidden></div>
+
+          <h3>評估 Assessment</h3>
+          <p class="note">依勾選結果評分，達門檻者標示「建議」並預設勾選，可自行調整。ICD-10 僅供參考。</p>
+          <div id="dxList" class="dx-list"></div>
+          <label class="block">其他診斷
+            <input type="text" id="dxOther" placeholder="e.g. Piriformis syndrome">
+          </label>
+
+          <h3>處置建議 Plan</h3>
+          <div id="planList" class="plan-list"></div>
+          <label class="block">其他處置
+            <textarea id="planOther" rows="2"></textarea>
+          </label>
+        </div>
+        <div>
+          <div class="section-head">
+            <h3>SOAP 病歷</h3>
+            <span class="btns">
+              <button id="copyBtn">複製</button>
+              <button id="dlBtn">下載 .txt</button>
+            </span>
+          </div>
+          <textarea id="output" class="output" spellcheck="false"></textarea>
+          <p class="note" id="editNote">可直接編輯上方文字；但若再修改左側勾選，內容會重新產生。</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="back2">← 上一步</button>
+        <button class="danger" id="resetBtn">新病人（清除全部）</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    本工具僅為臨床文書輔助，所有內容須由醫師確認；資料只在本機瀏覽器處理，不儲存、不上傳。
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
