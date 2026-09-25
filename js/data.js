@@ -9,6 +9,11 @@
  *   hint   (選填) 中文提示
  *   type   'yn'   → 有(+) / 無(-)
  *          'side' → 陰性 / R / L / Bil
+ *          'derm' → 同 side，陽性時可複選皮節 levels: ['L4', 'L5', ...]
+ *          'rom'  → 關節活動度量表（AROM / PROM 角度輸入，不設 +/-）
+ *                   motions: [{ id, label, normal }]，normal 為正常最大角度
+ *                   與正常值相差 ≥10° 或 ≥10% 視為受限；可在 criteria 使用
+ *                   '項目id.motion.a'（AROM 受限）或 '項目id.motion.p'（PROM 受限）
  *          'opts' → 自訂選項 options: [{ v, label, text, pos }]
  *                   pos: true 代表此選項視為「陽性」，會用於診斷評分
  *   text   (選填) 病歷輸出用文字，未填則用 label
@@ -41,7 +46,7 @@ const COMPLAINTS = [
       { id: 'morning_stiff', label: 'Morning stiffness > 30 min, improves with exercise', hint: '發炎性下背痛', type: 'yn', text: 'morning stiffness > 30 min improving with exercise' },
       { id: 'radiating', label: 'Radiating pain to leg', hint: '下肢放射痛', type: 'side', text: 'radiating pain to leg' },
       { id: 'below_knee', label: 'Radiation below the knee', type: 'yn', text: 'radiation below the knee' },
-      { id: 'numbness', label: 'Numbness / tingling of leg', hint: '下肢麻', type: 'side', text: 'numbness/tingling of leg' },
+      { id: 'numbness', label: 'Numbness / tingling of leg', hint: '下肢麻', type: 'derm', levels: ['L2', 'L3', 'L4', 'L5', 'S1'], text: 'numbness/tingling of leg' },
       { id: 'weakness', label: 'Subjective leg weakness', hint: '下肢無力', type: 'side', text: 'leg weakness' },
       { id: 'claudication', label: 'Neurogenic claudication', hint: '走路變遠變痛/麻，坐下或彎腰緩解', type: 'yn', text: 'neurogenic claudication (relieved by sitting/flexion)' },
       { id: 'night_pain', label: 'Night pain', hint: '夜間痛', type: 'yn', text: 'night pain' },
@@ -78,7 +83,7 @@ const COMPLAINTS = [
       { id: 'wk_l4', label: 'Knee extension weakness (L4)', type: 'side' },
       { id: 'wk_l5', label: 'Ankle DF / EHL weakness (L5)', type: 'side' },
       { id: 'wk_s1', label: 'Plantarflexion weakness (S1)', type: 'side' },
-      { id: 'sensory', label: 'Dermatomal hypoesthesia', type: 'side' },
+      { id: 'sensory', label: 'Hypoesthesia / numbness', hint: '感覺缺損，可選皮節', type: 'derm', levels: ['L2', 'L3', 'L4', 'L5', 'S1'], text: 'Hypoesthesia' },
       { id: 'kj', label: 'Decreased knee jerk', type: 'side' },
       { id: 'aj', label: 'Decreased ankle jerk', type: 'side' },
     ],
@@ -150,7 +155,7 @@ const COMPLAINTS = [
       { id: 'stiff', label: 'Neck stiffness', type: 'yn', text: 'neck stiffness' },
       { id: 'shoulder_ache', label: 'Shoulder / upper trapezius soreness', hint: '肩頸痠', type: 'side', text: 'upper trapezius soreness' },
       { id: 'radiating', label: 'Radiating pain to arm', hint: '上肢放射痛', type: 'side', text: 'radiating pain to arm' },
-      { id: 'numbness', label: 'Numbness / tingling of hand', type: 'side', text: 'numbness/tingling of hand' },
+      { id: 'numbness', label: 'Numbness / tingling of arm or hand', hint: '上肢麻', type: 'derm', levels: ['C5', 'C6', 'C7', 'C8', 'T1'], text: 'numbness/tingling of arm' },
       { id: 'weakness', label: 'Subjective arm weakness', type: 'side', text: 'arm weakness' },
       { id: 'headache', label: 'Occipital headache', hint: '頸因性頭痛', type: 'yn', text: 'occipital headache' },
     ],
@@ -182,7 +187,7 @@ const COMPLAINTS = [
       { id: 'wk_c6', label: 'Wrist extension weakness (C6)', type: 'side' },
       { id: 'wk_c7', label: 'Elbow extension weakness (C7)', type: 'side' },
       { id: 'wk_c8', label: 'Finger flexion weakness (C8)', type: 'side' },
-      { id: 'sensory', label: 'Dermatomal hypoesthesia', type: 'side' },
+      { id: 'sensory', label: 'Hypoesthesia / numbness', hint: '感覺缺損，可選皮節', type: 'derm', levels: ['C5', 'C6', 'C7', 'C8', 'T1'], text: 'Hypoesthesia' },
       { id: 'dtr_dec', label: 'Decreased biceps / triceps reflex', type: 'side' },
       { id: 'hoffmann', label: 'Hoffmann sign', type: 'side' },
       { id: 'hyperreflexia', label: 'Hyperreflexia (UE/LE)', type: 'yn' },
@@ -264,6 +269,13 @@ const COMPLAINTS = [
         plan: 'Rule out malignancy (e.g. Pancoast tumor, metastasis) — chest and shoulder X-ray' },
     ],
     exam: [
+      { id: 'romt', label: 'Shoulder ROM', hint: '角度測量（選填）', type: 'rom', motions: [
+        { id: 'flex', label: 'Flexion', normal: 180 },
+        { id: 'ext', label: 'Extension', normal: 60 },
+        { id: 'abd', label: 'Abduction', normal: 180 },
+        { id: 'er', label: 'External rotation', normal: 90 },
+        { id: 'ir', label: 'Internal rotation', normal: 70 },
+      ] },
       { id: 'arom', label: 'Active ROM', type: 'opts', options: [
         { v: 'full', label: 'Full', text: 'full' },
         { v: 'painful', label: 'Full but painful', text: 'full but painful', pos: true },
@@ -304,7 +316,7 @@ const COMPLAINTS = [
           'Refer to orthopedics for acute traumatic full-thickness tear or young active patient',
         ] },
       { id: 'frozen', name: 'Adhesive capsulitis', icd: { R: 'M75.01', L: 'M75.02', B: 'M75.01, M75.02', U: 'M75.00' }, threshold: 4,
-        criteria: { stiff: 2, night: 1, prom_er: 3, arom: 1, dm: 1 },
+        criteria: { stiff: 2, night: 1, prom_er: 3, arom: 1, dm: 1, 'romt.er.p': 2, 'romt.abd.p': 1 },
         plan: [
           'ROM exercise: pendulum, wall climbing, stretching within tolerance',
           'PT: heat and joint mobilization',
@@ -365,6 +377,10 @@ const COMPLAINTS = [
         plan: 'Rule out bone tumor — knee X-ray; consider MRI' },
     ],
     exam: [
+      { id: 'romk', label: 'Knee ROM measurement', text: 'Knee ROM', hint: '角度測量（選填）；伸直不足請輸入負值，如 -10', type: 'rom', motions: [
+        { id: 'flex', label: 'Flexion', normal: 135 },
+        { id: 'ext', label: 'Extension', normal: 0 },
+      ] },
       { id: 'rom', label: 'Knee ROM', type: 'opts', options: [
         { v: 'full', label: 'Full', text: 'full' },
         { v: 'flex', label: 'Limited flex', text: 'limited in flexion', pos: true },
@@ -386,7 +402,7 @@ const COMPLAINTS = [
     ],
     dx: [
       { id: 'oa', name: 'Osteoarthritis of knee', icd: { R: 'M17.11', L: 'M17.12', B: 'M17.0', U: 'M17.10' }, threshold: 4,
-        criteria: { __age50: 2, stiff: 1, walk: 1, stairs: 1, crepitus: 2, varus: 1, rom: 1, mjl: 1, quad: 1 },
+        criteria: { __age50: 2, stiff: 1, walk: 1, stairs: 1, crepitus: 2, varus: 1, rom: 1, 'romk.flex.p': 1, 'romk.ext.p': 1, mjl: 1, quad: 1 },
         plan: [
           'Weight reduction if overweight; quadriceps strengthening',
           'Low-impact aerobic exercise (cycling, swimming)',

@@ -10,17 +10,29 @@
   const state = {
     complaint: null,
     values: { history: {}, redFlags: {}, exam: {} },
+    levels: {},       // 'sec.id' → 皮節陣列（derm 項目）
+    rom: {},          // 'id.motion.a' / 'id.motion.p' → 角度字串（rom 項目）
     dxOverride: {},   // dx.id → true/false（使用者手動勾選）
     planOverride: {}, // plan 文字 → true/false
   };
 
+  function clearFindings() {
+    state.values = { history: {}, redFlags: {}, exam: {} };
+    state.levels = {};
+    state.rom = {};
+    state.dxOverride = {};
+    state.planOverride = {};
+  }
+
   // ---------------------------------------------------------------- helpers
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const sideTag = (v) => (v === 'B' ? 'bilateral' : v);
+  const normText = (m) => (m.normal ? `0–${m.normal}°` : '0°');
 
   function isPositive(item, v) {
     if (v == null) return false;
     if (item.type === 'yn') return v === 'y';
-    if (item.type === 'side') return v in SIDE_WORD;
+    if (item.type === 'side' || item.type === 'derm') return v in SIDE_WORD;
     const opt = item.options.find((o) => o.v === v);
     return !!(opt && opt.pos);
   }
@@ -47,6 +59,14 @@
         if (isPositive(item, state.values[sec][item.id])) pos.add(item.id);
       });
     });
+    c.exam.filter((item) => item.type === 'rom').forEach((item) => {
+      item.motions.forEach((m) => {
+        ['a', 'p'].forEach((k) => {
+          const key = `${item.id}.${m.id}.${k}`;
+          if (romLimited(m, state.rom[key])) pos.add(key);
+        });
+      });
+    });
     const age = parseInt($('age').value, 10);
     if (age >= 50) pos.add('__age50');
     if (age >= 60) pos.add('__age60');
@@ -54,6 +74,18 @@
     if (wk != null && wk < 6) pos.add('__acute');
     if (wk != null && wk >= 12) pos.add('__chronic');
     return pos;
+  }
+
+  /** 與正常值相差 ≥10° 或 ≥10% 視為受限 */
+  function romLimited(motion, val) {
+    const n = parseFloat(val);
+    if (isNaN(n)) return false;
+    return motion.normal - n >= Math.max(10, motion.normal * 0.1);
+  }
+
+  function dermLevels(sec, item) {
+    const chosen = state.levels[`${sec}.${item.id}`] || [];
+    return item.levels.filter((l) => chosen.includes(l));
   }
 
   function scoredDx() {
@@ -111,9 +143,7 @@
   function selectComplaint(c) {
     if (state.complaint !== c) {
       state.complaint = c;
-      state.values = { history: {}, redFlags: {}, exam: {} };
-      state.dxOverride = {};
-      state.planOverride = {};
+      clearFindings();
     }
     document.querySelectorAll('.cc-card').forEach((el) => el.classList.toggle('selected', el.dataset.id === c.id));
     $('toStep2').disabled = false;
@@ -122,13 +152,17 @@
   // ---------------------------------------------------------------- step 2
   function buttonsFor(item) {
     if (item.type === 'yn') return [['y', '+'], ['n', '−']];
-    if (item.type === 'side') return SIDE_BTNS;
+    if (item.type === 'side' || item.type === 'derm') return SIDE_BTNS;
     return item.options.map((o) => [o.v, o.label]);
   }
 
   function renderItems(sec, container) {
     container.innerHTML = '';
     state.complaint[sec].forEach((item) => {
+      if (item.type === 'rom') {
+        container.appendChild(renderRom(item));
+        return;
+      }
       const row = document.createElement('div');
       row.className = 'item';
       const label = document.createElement('div');
@@ -149,14 +183,66 @@
         group.appendChild(b);
       });
       row.append(label, group);
+      if (item.type === 'derm') row.appendChild(renderDermChips(sec, item));
       container.appendChild(row);
       paintRow(sec, item, group, row);
     });
   }
 
+  /** 皮節選擇（陽性時顯示，可複選） */
+  function renderDermChips(sec, item) {
+    const key = `${sec}.${item.id}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'chips';
+    wrap.innerHTML = '<span>皮節</span>';
+    item.levels.forEach((lv) => {
+      const b = document.createElement('button');
+      b.textContent = lv;
+      b.className = 'chip';
+      const sync = () => b.classList.toggle('on', (state.levels[key] || []).includes(lv));
+      b.onclick = () => {
+        const cur = state.levels[key] || [];
+        state.levels[key] = cur.includes(lv) ? cur.filter((x) => x !== lv) : [...cur, lv];
+        sync();
+      };
+      sync();
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  /** 關節活動度量表：AROM / PROM 角度輸入 */
+  function renderRom(item) {
+    const box = document.createElement('div');
+    box.className = 'item rom';
+    const rows = item.motions.map((m) => {
+      const cell = (k) => {
+        const key = `${item.id}.${m.id}.${k}`;
+        return `<input type="number" step="5" data-key="${key}" value="${state.rom[key] || ''}">`;
+      };
+      return `<tr><th>${m.label}</th><td>${cell('a')}</td><td>${cell('p')}</td><td class="nl">${normText(m)}</td></tr>`;
+    }).join('');
+    box.innerHTML =
+      `<div class="item-label">${item.label}${item.hint ? `<small>${item.hint}</small>` : ''}</div>` +
+      `<table><thead><tr><th></th><th>AROM°</th><th>PROM°</th><th class="nl">Normal</th></tr></thead><tbody>${rows}</tbody></table>`;
+    box.querySelectorAll('input').forEach((inp) => {
+      const motion = item.motions.find((m) => m.id === inp.dataset.key.split('.')[1]);
+      const paint = () => inp.classList.toggle('limited', romLimited(motion, inp.value));
+      inp.oninput = () => {
+        if (inp.value === '') delete state.rom[inp.dataset.key];
+        else state.rom[inp.dataset.key] = inp.value;
+        paint();
+      };
+      paint();
+    });
+    return box;
+  }
+
   function paintRow(sec, item, group, row) {
     const v = state.values[sec][item.id];
     group.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+    const chips = row.querySelector('.chips');
+    if (chips) chips.hidden = !isPositive(item, v);
     row.classList.toggle('pos', isPositive(item, v));
     row.classList.toggle('neg', v != null && !isPositive(item, v));
   }
@@ -164,8 +250,9 @@
   function negateRest(sec) {
     state.complaint[sec].forEach((item) => {
       if (state.values[sec][item.id] != null) return;
+      if (item.type === 'rom') return;
       if (item.type === 'yn') state.values[sec][item.id] = 'n';
-      else if (item.type === 'side') state.values[sec][item.id] = 'neg';
+      else if (item.type === 'side' || item.type === 'derm') state.values[sec][item.id] = 'neg';
       else {
         const neg = item.options.find((o) => !o.pos);
         if (neg) state.values[sec][item.id] = neg.v;
@@ -229,17 +316,36 @@
   }
 
   // ---------------------------------------------------------------- SOAP 文字
-  function itemPhrase(item, v) {
+  function dermSuffix(sec, item) {
+    const lv = dermLevels(sec, item);
+    return lv.length ? `, ${lv.join('/')} dermatome` : '';
+  }
+
+  function itemPhrase(item, v, sec) {
     const base = item.text || item.label;
-    if (item.type === 'side' && v in SIDE_WORD) return `${base} (${v === 'B' ? 'bilateral' : v})`;
+    if (item.type === 'side' && v in SIDE_WORD) return `${base} (${sideTag(v)})`;
+    if (item.type === 'derm' && v in SIDE_WORD) return `${base} (${sideTag(v)}${dermSuffix(sec, item)})`;
     if (item.type === 'opts') return `${base}: ${item.options.find((o) => o.v === v).text}`;
     return base;
   }
 
   function examValue(item, v) {
     if (item.type === 'yn') return v === 'y' ? '(+)' : '(-)';
-    if (item.type === 'side') return v === 'neg' ? '(-)' : `(+) ${v === 'B' ? 'bilateral' : v}`;
+    if (item.type === 'side') return v === 'neg' ? '(-)' : `(+) ${sideTag(v)}`;
+    if (item.type === 'derm') return v === 'neg' ? '(-)' : `(+) ${sideTag(v)}${dermSuffix('exam', item)}`;
     return item.options.find((o) => o.v === v).text;
+  }
+
+  function romLines(item) {
+    const deg = (x) => (x == null ? '-' : `${x}°`);
+    return item.motions
+      .map((m) => {
+        const a = state.rom[`${item.id}.${m.id}.a`];
+        const p = state.rom[`${item.id}.${m.id}.p`];
+        if (a == null && p == null) return null;
+        return `  ${m.label} ${deg(a)}/${deg(p)} (N ${normText(m)})`;
+      })
+      .filter(Boolean);
   }
 
   function sideSuffix() {
@@ -277,7 +383,7 @@
     c.history.forEach((item) => {
       const v = state.values.history[item.id];
       if (v == null) return;
-      (isPositive(item, v) ? pos : neg).push(itemPhrase(item, v));
+      (isPositive(item, v) ? pos : neg).push(itemPhrase(item, v, 'history'));
     });
     if (pos.length) S.push(`- (+) ${pos.join('; ')}`);
     if (neg.length) S.push(`- (-) ${neg.join('; ')}`);
@@ -298,6 +404,14 @@
     if (c.region === 'limb' && side in SIDE_WORD) O.push(`[${cap(SIDE_WORD[side])} ${c.cc.replace(' pain', '')}]`);
     let anyExam = false;
     c.exam.forEach((item) => {
+      if (item.type === 'rom') {
+        const lines = romLines(item);
+        if (lines.length) {
+          anyExam = true;
+          O.push(`- ${item.text || item.label} (AROM/PROM):`, ...lines);
+        }
+        return;
+      }
       const v = state.values.exam[item.id];
       if (v == null) return;
       anyExam = true;
@@ -389,9 +503,7 @@
   function reset() {
     if (!confirm('確定清除所有內容，開始新病人？')) return;
     state.complaint = null;
-    state.values = { history: {}, redFlags: {}, exam: {} };
-    state.dxOverride = {};
-    state.planOverride = {};
+    clearFindings();
     ['age', 'durNum', 'prevTx', 'historyNote', 'examNote', 'dxOther', 'planOther', 'outS', 'outO', 'outAP'].forEach((id) => ($(id).value = ''));
     $('sex').value = '';
     $('side').value = 'U';
