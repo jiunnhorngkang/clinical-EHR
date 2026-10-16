@@ -121,7 +121,7 @@
       const checked = text in state.planOverride ? state.planOverride[text] : true;
       items.push({ text, urgent, checked });
     };
-    positiveRedFlags().forEach((rf) => add(rf.plan, true));
+    positiveRedFlags().forEach((rf) => [].concat(rf.plan).forEach((p) => add(p, true)));
     dxRows.filter((r) => r.checked).forEach((r) => r.dx.plan.forEach((p) => add(p, false)));
     state.complaint.plan.forEach((p) => add(p, false));
     return items;
@@ -448,7 +448,12 @@
   }
 
   // ---------------------------------------------------------------- 導覽
+  let currentStep = 1;
+
   function go(step) {
+    currentStep = step;
+    $('editor').hidden = true;
+    $('openEditor').hidden = false;
     [1, 2, 3].forEach((n) => ($('step' + n).hidden = n !== step));
     document.querySelectorAll('#stepper li').forEach((li) => {
       const n = +li.dataset.step;
@@ -516,8 +521,219 @@
     go(1);
   }
 
+  // ---------------------------------------------------------------- 處置範本編輯
+  // 自訂內容存於 localStorage；僅存與預設不同的主訴。
+  // 格式：{ [complaintId]: { plan: [...], dx: { dxId: [...] }, rf: { rfId: [...] } } }
+  const PLAN_STORE = 'soap.planTemplates.v1';
+
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const plansOf = (c) => ({
+    plan: [...c.plan],
+    dx: Object.fromEntries(c.dx.map((d) => [d.id, [...d.plan]])),
+    rf: Object.fromEntries(c.redFlags.map((r) => [r.id, [].concat(r.plan)])),
+  });
+  const DEFAULT_PLANS = Object.fromEntries(COMPLAINTS.map((c) => [c.id, plansOf(c)]));
+
+  function applyPlans(c, p) {
+    if (Array.isArray(p.plan)) c.plan = [...p.plan];
+    c.dx.forEach((d) => { if (p.dx && Array.isArray(p.dx[d.id])) d.plan = [...p.dx[d.id]]; });
+    c.redFlags.forEach((r) => { if (p.rf && Array.isArray(p.rf[r.id])) r.plan = [...p.rf[r.id]]; });
+  }
+
+  function loadPlans() {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(PLAN_STORE) || '{}') || {};
+    } catch (e) { /* 無法讀取時沿用預設 */ }
+    COMPLAINTS.forEach((c) => { if (saved[c.id]) applyPlans(c, saved[c.id]); });
+  }
+
+  function savePlans(all) {
+    const custom = {};
+    Object.entries(all).forEach(([id, p]) => {
+      if (JSON.stringify(p) !== JSON.stringify(DEFAULT_PLANS[id])) custom[id] = p;
+    });
+    try {
+      localStorage.setItem(PLAN_STORE, JSON.stringify(custom));
+      return true;
+    } catch (e) {
+      alert('無法儲存到瀏覽器（可能是無痕模式或已封鎖網站資料）。本次修改仍會生效到關閉網頁為止，建議先匯出 JSON 備份。');
+      return false;
+    }
+  }
+
+  const editor = { draft: null, cid: null };
+
+  function openEditor() {
+    editor.draft = Object.fromEntries(COMPLAINTS.map((c) => [c.id, plansOf(c)]));
+    editor.cid = editor.cid || (state.complaint ? state.complaint.id : COMPLAINTS[0].id);
+    [1, 2, 3].forEach((n) => ($('step' + n).hidden = true));
+    document.querySelectorAll('#stepper li').forEach((li) => li.classList.remove('active'));
+    $('editor').hidden = false;
+    $('openEditor').hidden = true;
+    renderEditor();
+    window.scrollTo(0, 0);
+  }
+
+  function renderEditor() {
+    $('edTabs').innerHTML = '';
+    COMPLAINTS.forEach((c) => {
+      const b = document.createElement('button');
+      const customized = JSON.stringify(editor.draft[c.id]) !== JSON.stringify(DEFAULT_PLANS[c.id]);
+      b.className = 'tab' + (c.id === editor.cid ? ' on' : '');
+      b.innerHTML = `${c.label} ${c.zh}${customized ? ' <span class="dot" title="已自訂">●</span>' : ''}`;
+      b.onclick = () => { editor.cid = c.id; renderEditor(); };
+      $('edTabs').appendChild(b);
+    });
+
+    const c = COMPLAINTS.find((x) => x.id === editor.cid);
+    const d = editor.draft[c.id];
+    const body = $('edBody');
+    body.innerHTML = '';
+    body.appendChild(planGroup('一般建議', '每次都會列入', d.plan, (list) => (d.plan = list)));
+    c.dx.forEach((dx) => body.appendChild(planGroup(dx.name, '選此診斷時列入', d.dx[dx.id], (list) => (d.dx[dx.id] = list))));
+    c.redFlags.forEach((rf) => body.appendChild(planGroup(`⚠ ${rf.label}`, '紅旗 (+) 時置頂列入', d.rf[rf.id], (list) => (d.rf[rf.id] = list), true)));
+  }
+
+  /** 一組可編輯的處置清單；setList 回寫到草稿 */
+  function planGroup(title, sub, list, setList, urgent) {
+    const box = document.createElement('div');
+    box.className = 'ed-group' + (urgent ? ' urgent' : '');
+    box.innerHTML = `<div class="ed-title"><strong></strong><small>${sub}</small></div><div class="ed-rows"></div>`;
+    box.querySelector('strong').textContent = title;
+    const rows = box.querySelector('.ed-rows');
+
+    const draw = () => {
+      rows.innerHTML = '';
+      list.forEach((text, i) => {
+        const row = document.createElement('div');
+        row.className = 'ed-row';
+        const inp = document.createElement('textarea');
+        inp.rows = 1;
+        inp.value = text;
+        inp.oninput = () => { list[i] = inp.value; fit(inp); };
+        const btn = (label, title, fn, disabled) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.title = title;
+          b.disabled = !!disabled;
+          b.onclick = () => { fn(); setList(list); draw(); refreshTabs(); };
+          return b;
+        };
+        row.append(
+          inp,
+          btn('↑', '上移', () => list.splice(i - 1, 0, list.splice(i, 1)[0]), i === 0),
+          btn('↓', '下移', () => list.splice(i + 1, 0, list.splice(i, 1)[0]), i === list.length - 1),
+          btn('✕', '刪除', () => list.splice(i, 1)),
+        );
+        rows.appendChild(row);
+        requestAnimationFrame(() => fit(inp));
+      });
+      const add = document.createElement('button');
+      add.className = 'ghost';
+      add.textContent = '＋ 新增項目';
+      add.onclick = () => {
+        list.push('');
+        setList(list);
+        draw();
+        const all = rows.querySelectorAll('textarea');
+        all[all.length - 1].focus();
+      };
+      rows.appendChild(add);
+    };
+    draw();
+    return box;
+  }
+
+  function fit(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 2 + 'px';
+  }
+
+  function refreshTabs() {
+    document.querySelectorAll('#edTabs .tab').forEach((b, i) => {
+      const id = COMPLAINTS[i].id;
+      const customized = JSON.stringify(editor.draft[id]) !== JSON.stringify(DEFAULT_PLANS[id]);
+      const dot = b.querySelector('.dot');
+      if (customized && !dot) b.insertAdjacentHTML('beforeend', ' <span class="dot" title="已自訂">●</span>');
+      if (!customized && dot) dot.remove();
+    });
+  }
+
+  /** 去除空白項目 */
+  function cleanDraft(all) {
+    const tidy = (arr) => arr.map((s) => s.trim()).filter(Boolean);
+    Object.values(all).forEach((p) => {
+      p.plan = tidy(p.plan);
+      Object.keys(p.dx).forEach((k) => (p.dx[k] = tidy(p.dx[k])));
+      Object.keys(p.rf).forEach((k) => (p.rf[k] = tidy(p.rf[k])));
+    });
+    return all;
+  }
+
+  function saveEditor() {
+    cleanDraft(editor.draft);
+    COMPLAINTS.forEach((c) => applyPlans(c, editor.draft[c.id]));
+    savePlans(editor.draft);
+    state.planOverride = {};
+    go(currentStep);
+  }
+
+  function resetEditorComplaint() {
+    const c = COMPLAINTS.find((x) => x.id === editor.cid);
+    if (!confirm(`將「${c.label} ${c.zh}」的處置項目還原為預設值？（按「儲存」後才會生效）`)) return;
+    editor.draft[c.id] = clone(DEFAULT_PLANS[c.id]);
+    renderEditor();
+  }
+
+  function exportPlans() {
+    const data = { app: 'clinical-EHR plan templates', version: 1, exported: new Date().toISOString(), plans: cleanDraft(clone(editor.draft)) };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `plan-templates_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importPlans(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const plans = data.plans || data;
+        let n = 0;
+        COMPLAINTS.forEach((c) => {
+          const p = plans[c.id];
+          if (!p) return;
+          const d = editor.draft[c.id];
+          if (Array.isArray(p.plan)) d.plan = p.plan.map(String);
+          Object.keys(d.dx).forEach((k) => { if (p.dx && Array.isArray(p.dx[k])) d.dx[k] = p.dx[k].map(String); });
+          Object.keys(d.rf).forEach((k) => { if (p.rf && Array.isArray(p.rf[k])) d.rf[k] = p.rf[k].map(String); });
+          n++;
+        });
+        if (!n) throw new Error('no matching complaints');
+        renderEditor();
+        alert(`已匯入 ${n} 個主訴的處置範本，請確認內容後按「儲存」。`);
+      } catch (e) {
+        alert('匯入失敗：檔案格式不正確。');
+      }
+    };
+    reader.readAsText(file);
+  }
+
   // ---------------------------------------------------------------- init
+  loadPlans();
   renderComplaints();
+  $('openEditor').onclick = openEditor;
+  $('edSave').onclick = saveEditor;
+  $('edCancel').onclick = () => go(currentStep);
+  $('edReset').onclick = resetEditorComplaint;
+  $('edExport').onclick = exportPlans;
+  $('edImport').onchange = (e) => {
+    if (e.target.files[0]) importPlans(e.target.files[0]);
+    e.target.value = '';
+  };
   $('nrs').oninput = (e) => ($('nrsOut').textContent = e.target.value < 0 ? '—' : `${e.target.value}/10`);
   $('toStep2').onclick = () => go(2);
   $('toStep3').onclick = () => go(3);

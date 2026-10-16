@@ -14,6 +14,7 @@
       <li data-step="2">2. 病史與理學檢查</li>
       <li data-step="3">3. 評估與病歷</li>
     </ol>
+    <button class="ghost" id="openEditor">⚙ 編輯處置範本</button>
   </header>
 
   <main>
@@ -157,6 +158,29 @@
       <div class="actions">
         <button id="back2">← 上一步</button>
         <button class="danger" id="resetBtn">新病人（清除全部）</button>
+      </div>
+    </section>
+    <!-- ================= 處置範本編輯 ================= -->
+    <section id="editor" class="step" hidden>
+      <div class="section-head">
+        <h2>編輯處置範本 Plan templates</h2>
+        <span class="btns">
+          <button id="edExport">匯出 JSON</button>
+          <label class="button">匯入 JSON<input type="file" id="edImport" accept=".json,application/json" hidden></label>
+        </span>
+      </div>
+      <p class="note">
+        修改後按「儲存」，之後產生的病歷就會使用新的處置項目。設定只存在<b>這台電腦的這個瀏覽器</b>；
+        換電腦或清除瀏覽器資料前，請先「匯出 JSON」備份，再到新電腦「匯入」。
+      </p>
+      <div class="tabs" id="edTabs"></div>
+      <div id="edBody"></div>
+      <div class="actions">
+        <button class="danger" id="edReset">還原此主訴預設值</button>
+        <span class="btns">
+          <button id="edCancel">取消</button>
+          <button class="primary" id="edSave">儲存</button>
+        </span>
       </div>
     </section>
   </main>

@@ -170,3 +170,28 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 16px
 .rom input { width: 76px; padding: 3px 6px; }
 .rom input.limited { border-color: var(--pos); background: var(--pos-soft); color: var(--pos); }
 .rom .nl { color: var(--muted); font-size: 12px; }
+
+/* ---------- plan template editor ---------- */
+.topbar #openEditor { margin-left: auto; }
+label.button {
+  display: inline-block; cursor: pointer; padding: 7px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+}
+label.button:hover { border-color: var(--accent); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.tab { border-radius: 999px; padding: 5px 14px; font-size: 14px; }
+.tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab .dot { color: var(--pos); font-size: 10px; vertical-align: middle; }
+.tab.on .dot { color: #fff; }
+.ed-group {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; margin-bottom: 10px;
+}
+.ed-group.urgent { border-color: var(--danger); }
+.ed-group.urgent .ed-title strong { color: var(--danger); }
+.ed-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.ed-title small { color: var(--muted); font-size: 12px; }
+.ed-rows { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ed-row { display: flex; gap: 4px; width: 100%; align-items: flex-start; }
+.ed-row textarea { flex: 1; resize: none; overflow: hidden; font-size: 14px; line-height: 1.4; }
+.ed-row button { padding: 4px 9px; font-size: 13px; }
